@@ -434,9 +434,9 @@ int main()
 	users = create_user_db(users, totalusers);
 	fill_userdb(users, totalusers, "user.txt");
 	print_users(users, totalusers);
+    //print_graph(graph,vertices);
 	menu(users, userp);
 	//print_cities(city_name,vertices);
-	//print_graph_edge(graph,city_name,vertices);
 	//print_graph(graph,vertices);
 	//printf("%d",vertices);
 	return 0;
