@@ -14,9 +14,20 @@ struct details
 	char lname[50];
 };
 
-struct orders
+struct deli
 {
-	char s[50];
+	int src;
+	int des;
+	int norder;
+	int *arr;
+};
+
+struct meditems
+{
+	char usrname[50];
+	int id[10];
+	int number[10];
+	int locid;
 };
 
 char CURRENT_USERNAME[50] = { "" };
@@ -25,15 +36,28 @@ char CURRENT_FNAME[50] = { "" };
 
 char CURRENT_LNAME[50] = { "" };
 
+typedef struct deli DEL;
+DEL delivery;
+
+struct meditems M;
+
 typedef struct details USER;
 USER * users;
 int totalusers = 0;
 int *userp = &totalusers;
 
 float **graph;
+float **floyd;
 char **city_name;
 int vertices = 0;
 int *nodes = &vertices;
+
+int *dj_path;
+int tpath = 0;
+
+char **medicines;
+int tmed = 0;
+int *tmedi = &tmed;
 
 void get_nodes(char filename[], int *nodes)
 {
@@ -170,7 +194,7 @@ void print_cities(char **cities, int n)
 {
 	for (int i = 0; i < n; i++)
 	{
-		printf("%s\n", cities[i]);
+		printf("%d)\t%s\n", i + 1, cities[i]);
 	}
 }
 
@@ -335,20 +359,372 @@ void logout()
 	strcpy(CURRENT_LNAME, "");
 }
 
-void menu(USER *db, int *users)
+void print_path_dj(int path[], int des, int src, char **city)
+{
+	if (des == src)
+	{
+		dj_path[tpath] = des;
+		tpath++;
+		//printf(" %s",city[des]);
+		return;
+	}
+	else
+	{
+		dj_path[tpath] = des;
+		tpath++;
+		//printf("%s<-",city[des]);
+		print_path_dj(path, path[des], src, city);
+	}
+}
+
+int min_distance(float *dis, int *temp, int v)
+{
+	int i, min = 10000, index;
+	for (i = 0; i < v; i++)
+	{
+		if (temp[i] == 0 && dis[i] <= min)
+		{
+			min = dis[i];
+			index = i;
+		}
+	}
+
+	return index;
+}
+
+int dj(float **a, int v, int src, int des, char **city)
+{
+	float dis[v];
+	int flag = 0, i;
+	int path[v];
+	int temp[v];
+	for (i = 0; i < v; i++)
+
+	{
+		dis[i] = 10000;
+		temp[i] = 0;
+		path[i] = src;
+	}
+
+	dis[src] = 0;
+	for (i = 0; i < v - 1; i++)
+	{
+		int u = min_distance(dis, temp, v);
+		temp[u] = 1;
+		int j;
+		for (j = 0; j < v; j++)
+		{
+			if (temp[j] == 0 && a[u][j] && dis[u] != INT_MAX && dis[u] + a[u][j] <= dis[j])
+			{
+				dis[j] = dis[u] + a[u][j];
+				path[j] = u;
+			}
+		}
+	}
+
+	//printf("\n");
+	tpath = 0;
+	print_path_dj(path, des, src, city);
+	return dis[des];
+}
+
+void flloyd_warshall(float **graph, int n)
+{
+	for (int k = 0; k < n; k++)
+	{
+		for (int i = 0; i < n; i++)
+		{
+			for (int j = 0; j < n; j++)
+			{
+				int via_prev_path = graph[i][k] + graph[k][j];
+				if (via_prev_path < graph[i][j])
+				{
+					graph[i][j] = via_prev_path;
+				}
+			}
+		}
+	}
+}
+
+void printf_city_opt(char **city_name, int n)
+{
+	for (int i = 0; i < n; i++)
+	{
+		printf("%d\t%s", i + 1, city_name);
+	}
+}
+
+int get_option(char **city_name, int n, int s)
+{
+	if (s == 1)
+	{
+		printf_city_opt(city_name, n);
+	}
+
+	int ch;
+	printf("Enter Choice: ");
+	scanf("%d", &ch);
+	return ch;
+}
+
+int get_index(int *arr, int n, int find)
+{
+	for (int i = 0; i < n; i++)
+	{
+		//printf("%d %d\n",arr[i],find);
+		if (arr[i] == find)
+			return i;
+	}
+
+	//printf("\n");
+	return -1;
+}
+
+int min_distance_path(float *dis, DEL dev, int *temp)
+{
+	//printf("Min dest\n\n");
+	int i, min = 10000, index;
+	for (i = 0; i < dev.norder; i++)
+	{
+		if (temp[i] == 0 && dis[dev.arr[i]] <= min && dis[dev.arr[i]] > 0)
+		{
+			min = dis[dev.arr[i]];
+			index = dev.arr[i];
+		}
+	}
+
+	//printf("Fin\n\n");
+	return index;
+}
+
+void print_dj(char **city, int n)
+{
+	for (int i = tpath - 1; i > n; i--)
+	{
+		printf("%s --> ", city[dj_path[i]]);
+	}
+
+	printf("%s", city[dj_path[n]]);
+}
+
+int travel_path(float **graph, float **floyd, DEL dev, int n, char **city, int show)
+{
+	int cost = 0;
+	int cost1;
+	int traveled[dev.norder];
+	for (int i = 0; i < dev.norder; i++)
+	{
+		traveled[i] = 0;
+	}
+
+	int v = dev.src;
+	if (show) printf("Path: Without Delivery:\n\n");
+	cost1 = dj(graph, n, dev.src, dev.des, city);
+	if (show) print_dj(city, 0);
+	if (show) printf("\nPath: after delivery:\n");
+	int u = min_distance_path(floyd[v], dev, traveled);
+	int gindex = get_index(dev.arr, dev.norder, u);
+	traveled[gindex] = 1;
+	//printf("Src: %s\t\tDest %s\n",city_name[v],city_name[u]);
+	for (int i = 0; i < dev.norder - 1; i++)
+	{
+		cost += dj(graph, n, v, u, city);
+		if (show)
+		{
+			print_dj(city, 1);
+			printf(" --> ");
+		}
+
+		v = u;
+		u = min_distance_path(floyd[v], dev, traveled);
+		gindex = get_index(dev.arr, dev.norder, u);
+		//printf("\n\nIndex: %d\n\n",gindex);
+		traveled[gindex] = 1;
+		//printf("\nSrc: %s\t\tDest %s\n",city_name[v],city_name[u]);
+	}
+
+	cost += dj(graph, n, v, u, city);
+	if (show) print_dj(city, 0);
+	//printf("\nSrc: %s\t\tDest %s\n",city_name[u],city_name[dev.des]);
+	//cost+=dj(graph,n,u,dev.des,city);
+	if (show) printf("\nCOST Without Delivery: %d\nCOST With Delivery: %d\n\n", cost1, cost);
+	if (dev.des == u)
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+void add_to_file(char filename[], int n)
+{
+	FILE * fp;
+	fp = fopen(filename, "a");
+	if (fp == NULL)
+	{
+		printf("x %s not found\nx Aborting...", filename);
+		exit(0);
+	}
+
+	int i;
+	for (i = 0; i < n; i++)
+	{
+		fprintf(fp, "%s %d %d %d\n", CURRENT_USERNAME, M.id[i], M.number[i], M.locid);
+	}
+
+	fclose(fp);
+}
+
+void request_delivery(char **city, int tcity, char **medicines, int tmed)
+{
+	int i;
+	int med_id;
+	int quantity;
+	int loc;
+	char choice = 'y';
+	char med;
+	printf("|=============|=========================|\n");
+	printf("|Medicine ID. | Medicine Name           |\n");
+	printf("|=============|=========================|\n");
+	for (i = 0; i < tmed; i++)
+	{
+		printf(" %d\t\t", i + 1);
+		printf("%s\n", medicines[i]);
+	}
+
+	printf("=============|==========================|\n");
+
+	int j = 0;
+	while (choice == 'y' || choice == 'Y')
+	{
+		printf("Enter Medicine Id: ");
+		scanf("%d", &med_id);
+		printf("You want to order %s ?(y/n)", medicines[med_id - 1]);
+		scanf("%*c%c", &med);
+		if (med == 'n')
+		{
+			continue;
+		}
+
+		printf("Number of Quantity: ");
+		scanf("%d", &quantity);
+		M.id[j] = med_id;
+		M.number[j] = quantity;
+		j++;
+		printf("Do you want to order more items?(y/n): ");
+		scanf("%*c%c", &choice);
+	}
+
+	printf("Enter location to be delivered: ");
+	print_cities(city, tcity);
+	printf("\nEnter location: ");
+	scanf("%d", &loc);
+	M.locid = loc;
+	add_to_file("delivery_item.txt", j);
+}
+
+void deliver_item(float **graph, float **floyd, char **city, int n)
+{
+	int src, des;
+	delivery.norder = 0;
+	printf("\n========================\n");
+	print_cities(city, n);
+	printf("\n========================\n");
+	printf("Enter Source: ");
+	scanf("%d", &src);
+	delivery.src = src - 1;
+	printf("Enter Destination: ");
+	scanf("%d", &des);
+	delivery.des = des - 1;
+	delivery.arr[delivery.norder] = des - 1;
+	delivery.norder++;
+	dj(graph, n, delivery.src, delivery.des, city);
+	if (tpath > 2)
+	{
+		printf("Recommended Cities to Deliver\n");
+		for (int i = 1; i < tpath - 1; i++)
+		{
+			printf("%d)\t%s\n", dj_path[i] + 1, city[dj_path[i]]);
+		}
+
+		printf("\n\n");
+	}
+
+	printf("Write city id to 0 to stop\n\n");
+	while (delivery.norder < n)
+	{
+		printf("Enter City id to deliver: ");
+		scanf("%d", &src);
+		if (src == 0) break;
+		delivery.arr[delivery.norder] = src - 1;
+		delivery.norder++;
+		if (travel_path(graph, floyd, delivery, n, city, 0) == 0)
+		{
+			printf("\nDeliver to these location will make you travel more after reaching destination.\n");
+			printf("Do you still want to deliver to %s\n", city[src - 1]);
+			printf("   YES - 1\n   NO  - 0\n");
+			printf("\nEnter Choice: ");
+			scanf("%d", &des);
+			if (des == 0)
+			{
+				delivery.norder--;
+				continue;
+			}
+		}
+
+		delivery.arr = (int*) realloc(delivery.arr, sizeof(ALOCATE_FACTOR + delivery.norder) *sizeof(int));
+	}
+
+	printf("Estimated calculations: \n");
+	travel_path(graph, floyd, delivery, n, city, 1);
+}
+
+void check_intercity(float **graph, float **floyd, char **city, int n)
+{
+	delivery.norder = 0;
+	int src, des;
+	printf("\n========================\n");
+	print_cities(city, n);
+	printf("\n========================\n");
+	printf("Enter Source: ");
+	scanf("%d", &src);
+	delivery.src = src - 1;
+	printf("Enter Destination: ");
+	scanf("%d", &des);
+	delivery.des = des - 1;
+	delivery.arr[delivery.norder] = des - 1;
+	delivery.norder++;
+	printf("Cities that may come in between %s to %s path\n\n", city[src - 1], city[des - 1]);
+	for (int i = 0; i < n; i++)
+	{
+		if (i != src - 1 && i != des - 1)
+		{
+			delivery.arr[delivery.norder] = i;
+			delivery.norder++;
+			if (travel_path(graph, floyd, delivery, n, city, 0))
+			{
+				printf("%d)\t%s\n", i + 1, city[i]);
+			}
+
+			delivery.norder--;
+		}
+	}
+}
+
+void menu(USER *db, int *users, char **city, int n, char **medicines, int tmed, float **floyd)
 {
 	int sign = is_signed();
-	printf("======================\n");
+	printf("\n===============================================\n");
 	if (sign)
 	{
 		printf(" Welcome %s\n", CURRENT_FNAME);
-		printf("======================\n");
-		printf(" 1. Request Delivery\n");
-		printf(" 2. Deliver Item\n");
-		printf(" 3. Check orders\n");
+		printf("===============================================\n");
+		printf(" 1. Request Medicines Delivery\n");
+		printf(" 2. Deliver Medicines\n");
+		printf(" 3. Check Recommended Cities to deliver\n");
 		printf(" 4. Logout\n");
 		printf(" 5. Exit\n");
-		printf("======================\n");
+		printf("===============================================\n");
 		printf("Enter Choice: ");
 		int ch;
 		char usr[50], psw[50];
@@ -357,36 +733,39 @@ void menu(USER *db, int *users)
 		{
 			case 1:
 				//TO DO
-				menu(db, users);
+				request_delivery(city, n, medicines, tmed);
+				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 2:
 				// TO DO
-				menu(db, users);
+				deliver_item(graph, floyd, city, n);
+				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 3:
 				// TO DO
-				menu(db, users);
+				check_intercity(graph, floyd, city, n);
+				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 4:
 				logout();
-				menu(db, users);
+				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 5:
 				exit(0);
 				break;
 			default:
 				printf(" ! Invalid Choice\n");
-				menu(db, users);
+				menu(db, users, city, n, medicines, tmed, floyd);
 		}
 	}
 	else
 	{
 		printf(" Welcome User\n");
-		printf("======================\n");
+		printf("===============================================\n");
 		printf(" 1. Log-in\n");
 		printf(" 2. Create Account\n");
 		printf(" 3. Exit\n");
-		printf("======================\n");
+		printf("===============================================\n");
 		printf("Enter Choice: ");
 		int ch;
 		char usr[50], psw[50];
@@ -407,35 +786,77 @@ void menu(USER *db, int *users)
 					printf("! Invalid username or Password\n");
 				}
 
-				menu(db, users);
+				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 2:
 				create_user(db, users, "user.txt");
 				print_users(db, *users);
-				menu(db, users);
+				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 3:
 				exit(0);
 				break;
 			default:
 				printf(" ! Invalid Choice\n");
-				menu(db, users);
+				menu(db, users, city, n, medicines, tmed, floyd);
 		}
 	}
+}
+
+void cpy_graph(float **src, float **des, int n)
+{
+	for (int i = 0; i < n; i++)
+	{
+		for (int j = 0; j < n; j++)
+		{
+			des[i][j] = src[i][j];
+		}
+	}
+}
+
+void get_medicines(char filename[], int *med)
+{
+	FILE * fp;
+	fp = fopen(filename, "r");
+	if (fp == NULL)
+	{
+		printf("x %s not found\nx Aborting...", filename);
+		exit(0);
+	}
+
+	char temp[100];
+	while (!feof(fp))
+	{
+		fscanf(fp, "%s", temp);
+		*med = *med + 1;
+	}
+
+	fclose(fp);
 }
 
 int main()
 {
 	get_nodes("cities.txt", nodes);
 	get_users("user.txt", userp);
+	get_medicines("medicines.txt", tmedi);
 	city_name = set_cities("cities.txt", city_name, vertices);
+	medicines = set_cities("medicines.txt", medicines, tmed);
 	graph = create_graph(graph, vertices);
+	floyd = create_graph(floyd, vertices);
 	add_graph_data(graph, "distance.txt");
+	cpy_graph(graph, floyd, vertices);
+	flloyd_warshall(floyd, vertices);
 	users = create_user_db(users, totalusers);
 	fill_userdb(users, totalusers, "user.txt");
 	print_users(users, totalusers);
-    //print_graph(graph,vertices);
-	menu(users, userp);
+	dj_path = (int*) malloc(vertices* sizeof(int));
+	delivery.arr = (int*) malloc((ALOCATE_FACTOR) *sizeof(int));
+	delivery.norder = 0;
+	//printf("\n%d\n",travel_path(graph,floyd,delivery,vertices,city_name,1));
+	//print_graph_edge(floyd,city_name,vertices);
+	//printf("KMS: %d",dj(graph,vertices,102,103,city_name));
+	//print_graph(graph,vertices);
+	menu(users, userp, city_name, vertices, medicines, tmed, floyd);
 	//print_cities(city_name,vertices);
 	//print_graph(graph,vertices);
 	//printf("%d",vertices);
