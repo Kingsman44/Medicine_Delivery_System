@@ -12,6 +12,7 @@ struct details
 	char password[50];
 	char fname[50];
 	char lname[50];
+	int wallet;
 };
 
 struct deli
@@ -25,8 +26,8 @@ struct deli
 struct meditems
 {
 	char usrname[50];
-	int id[10];
-	int number[10];
+	int id;
+	int number;
 	int locid;
 };
 
@@ -36,10 +37,18 @@ char CURRENT_FNAME[50] = { "" };
 
 char CURRENT_LNAME[50] = { "" };
 
+int CURRENT_INDEX = -1;
+
+int CURRENT_WALLET = 0;
+
 typedef struct deli DEL;
 DEL delivery;
 
-struct meditems M;
+typedef struct meditems MED;
+
+MED * M;
+int tmorder = 0;
+int *torder = &tmorder;
 
 typedef struct details USER;
 USER * users;
@@ -58,6 +67,8 @@ int tpath = 0;
 char **medicines;
 int tmed = 0;
 int *tmedi = &tmed;
+
+int *order_freq;
 
 void get_nodes(char filename[], int *nodes)
 {
@@ -90,11 +101,102 @@ void get_users(char filename[], int *users)
 	}
 
 	char str1[100], str2[100], str3[100], str4[100];
+	int num;
 	while (!feof(fp))
 	{
-		fscanf(fp, "%s\t%s\t%s\t%s\n", str1, str2, str3, str4);
-		//printf("%s\t%s\t%s\t%s\t%d\n", str1, str2, str3, str4, num);
+		fscanf(fp, "%s\t%s\t%s\t%s\t%d\n", str1, str2, str3, str4, &num);
 		*users = *users + 1;
+	}
+
+	fclose(fp);
+}
+
+void get_ord(char filename[], int *ord)
+{
+	FILE * fp;
+	fp = fopen(filename, "r");
+	if (fp == NULL)
+	{
+		printf("x %s not found\nx Aborting...", filename);
+		exit(0);
+	}
+
+	char str1[100];
+	int num, num1, num2;
+	while (!feof(fp))
+	{
+		fscanf(fp, "%s %d %d %d\n", str1, &num, &num1, &num2);
+		*ord = *ord + 1;
+	}
+
+	fclose(fp);
+}
+
+MED* create_ord(MED *M, int n)
+{
+	M = (MED*) malloc((n + ALOCATE_FACTOR) *sizeof(MED));
+	return M;
+}
+
+MED* fill_ord(char filename[], MED *M, int n)
+{
+	FILE * fp;
+	fp = fopen(filename, "r");
+	if (fp == NULL)
+	{
+		printf("x %s not found\nx Aborting...", filename);
+		exit(0);
+	}
+
+	for (int i = 0; i < n; i++)
+	{
+		fscanf(fp, "%s %d %d %d\n", M[i].usrname, &M[i].id, &M[i].number, &M[i].locid);
+		printf("%s\t%d\t%d\t%d\n\n", M[i].usrname, M[i].id, M[i].number, M[i].locid);
+	}
+
+	fclose(fp);
+	return M;
+}
+
+void overwrite_ord(char filename[], MED *M, int n)
+{
+	FILE * fp;
+	fp = fopen(filename, "w");
+	if (fp == NULL)
+	{
+		printf("x %s not found\nx Aborting...", filename);
+		exit(0);
+	}
+
+	for (int i = 0; i < n; i++)
+	{
+		fprintf(fp, "%s\t%d\t%d\t%d\n", M[i].usrname, M[i].id, M[i].number, M[i].locid);
+	}
+
+	fclose(fp);
+}
+
+void print_ord(MED *M, int n)
+{
+	for (int i = 0; i < n; i++)
+	{
+		printf("%s\t%d\t%d\t%d\n\n", M[i].usrname, M[i].id, M[i].number, M[i].locid);
+	}
+}
+
+void overwrite_users(char filename[], USER *db, int n)
+{
+	FILE * fp;
+	fp = fopen(filename, "w");
+	if (fp == NULL)
+	{
+		printf("x %s not found\nx Aborting...", filename);
+		exit(0);
+	}
+
+	for (int i = 0; i < n; i++)
+	{
+		fscanf(fp, "%s\t%s\t%s\t%s\t%d\n", db[i].username, db[i].password, db[i].fname, db[i].lname, db[i].wallet);
 	}
 
 	fclose(fp);
@@ -139,7 +241,7 @@ void fill_userdb(USER *db, int n, char filename[])
 
 	for (int i = 0; i < n; i++)
 	{
-		fscanf(fp, "%s\t%s\t%s\t%s\n", db[i].username, db[i].password, db[i].fname, db[i].lname);
+		fscanf(fp, "%s\t%s\t%s\t%s\t%d\n", db[i].username, db[i].password, db[i].fname, db[i].lname, &db[i].wallet);
 	}
 }
 
@@ -224,7 +326,7 @@ void print_users(USER *db, int n)
 {
 	for (int i = 0; i < n; i++)
 	{
-		printf("Username:%s\nPassword:%s\nFirstName:%s\nLastName:%s\n\n", db[i].username, db[i].password, db[i].fname, db[i].lname);
+		printf("Username:%s\nPassword:%s\nFirstName:%s\nLastName:%s\nWallet Balance:%d\n\n", db[i].username, db[i].password, db[i].fname, db[i].lname, db[i].wallet);
 	}
 }
 
@@ -252,6 +354,8 @@ int check_signin(USER *db, int n, char username[], char password[])
 			strcpy(CURRENT_USERNAME, username);
 			strcpy(CURRENT_FNAME, db[i].fname);
 			strcpy(CURRENT_LNAME, db[i].lname);
+			CURRENT_INDEX = i;
+			CURRENT_WALLET = db[i].wallet;
 			return 1;
 		}
 	}
@@ -301,7 +405,7 @@ int isvalid_pass(char str[])
 	return 0;
 }
 
-void create_user(USER *db, int *users, char filename[])
+USER* create_user(USER *db, int *users, char filename[])
 {
 	db = (USER*) realloc(db, (*users + ALOCATE_FACTOR) *sizeof(USER));
 	char usr[50];
@@ -337,12 +441,14 @@ void create_user(USER *db, int *users, char filename[])
 		scanf("%s%s", db[*users].fname, db[*users].lname);
 	}
 
+	db[*users].wallet = 100;
 	FILE * fp;
 	fp = fopen(filename, "a");
-	fprintf(fp, "%s\t%s\t%s\t%s\n", db[*users].username, db[*users].password, db[*users].fname, db[*users].lname);
+	fprintf(fp, "%s\t%s\t%s\t%s\t%d\n", db[*users].username, db[*users].password, db[*users].fname, db[*users].lname, db[*users].wallet);
 	fclose(fp);
 	*users = *users + 1;
 	check_signin(db, *users, db[*users].username, db[*users].password);
+	return db;
 }
 
 int is_signed()
@@ -357,6 +463,8 @@ void logout()
 	strcpy(CURRENT_USERNAME, "");
 	strcpy(CURRENT_FNAME, "");
 	strcpy(CURRENT_LNAME, "");
+	CURRENT_INDEX = -1;
+	CURRENT_WALLET = 0;
 }
 
 void print_path_dj(int path[], int des, int src, char **city)
@@ -556,7 +664,7 @@ int travel_path(float **graph, float **floyd, DEL dev, int n, char **city, int s
 	return 0;
 }
 
-void add_to_file(char filename[], int n)
+void add_to_file(char filename[], int n, int q)
 {
 	FILE * fp;
 	fp = fopen(filename, "a");
@@ -566,10 +674,9 @@ void add_to_file(char filename[], int n)
 		exit(0);
 	}
 
-	int i;
-	for (i = 0; i < n; i++)
+	for (int i = 0; i < n; i++)
 	{
-		fprintf(fp, "%s %d %d %d\n", CURRENT_USERNAME, M.id[i], M.number[i], M.locid);
+		fprintf(fp, "%s %d %d %d\n", CURRENT_USERNAME, M[q + i].id, M[q + i].number, M[q + i].locid);
 	}
 
 	fclose(fp);
@@ -595,6 +702,7 @@ void request_delivery(char **city, int tcity, char **medicines, int tmed)
 	printf("=============|==========================|\n");
 
 	int j = 0;
+	int old = *torder;
 	while (choice == 'y' || choice == 'Y')
 	{
 		printf("Enter Medicine Id: ");
@@ -608,8 +716,11 @@ void request_delivery(char **city, int tcity, char **medicines, int tmed)
 
 		printf("Number of Quantity: ");
 		scanf("%d", &quantity);
-		M.id[j] = med_id;
-		M.number[j] = quantity;
+		M[*torder].id = med_id;
+		M[*torder].number = quantity;
+		strcpy(M[*torder].usrname, CURRENT_USERNAME);
+		*torder = *torder + 1;
+		M = (MED*) realloc(M, (ALOCATE_FACTOR + *torder) *sizeof(MED));
 		j++;
 		printf("Do you want to order more items?(y/n): ");
 		scanf("%*c%c", &choice);
@@ -619,8 +730,13 @@ void request_delivery(char **city, int tcity, char **medicines, int tmed)
 	print_cities(city, tcity);
 	printf("\nEnter location: ");
 	scanf("%d", &loc);
-	M.locid = loc;
-	add_to_file("delivery_item.txt", j);
+	for (int i = 0; i < j; i++)
+	{
+		M[old + i].locid = loc;
+	}
+
+	print_ord(M, *torder);
+	add_to_file("delivery_item.txt", j, old);
 }
 
 void deliver_item(float **graph, float **floyd, char **city, int n)
@@ -711,6 +827,30 @@ void check_intercity(float **graph, float **floyd, char **city, int n)
 	}
 }
 
+int *update_order_freq(int *frq, int n, MED *M, int m)
+{
+	for (int i = 0; i < n; i++)
+	{
+		frq[i] = 0;
+	}
+
+	for (int i = 0; i < m; i++)
+	{
+		frq[M[i].locid]++;
+	}
+
+	return frq;
+}
+
+void no_of_orders(int *frq, int n, char **city)
+{
+	for (int i = 0; i < n; i++)
+	{
+		if (frq[i] > 0)
+			printf("%d)\t%s\t%d\n", i + 1, city[i], frq[i]);
+	}
+}
+
 void menu(USER *db, int *users, char **city, int n, char **medicines, int tmed, float **floyd)
 {
 	int sign = is_signed();
@@ -718,12 +858,14 @@ void menu(USER *db, int *users, char **city, int n, char **medicines, int tmed, 
 	if (sign)
 	{
 		printf(" Welcome %s\n", CURRENT_FNAME);
+		printf(" Wallet Balance - %d\n", CURRENT_WALLET);
 		printf("===============================================\n");
 		printf(" 1. Request Medicines Delivery\n");
 		printf(" 2. Deliver Medicines\n");
 		printf(" 3. Check Recommended Cities to deliver\n");
-		printf(" 4. Logout\n");
-		printf(" 5. Exit\n");
+		printf(" 4. Check Available Request in each location\n");
+		printf(" 5. Logout\n");
+		printf(" 6. Exit\n");
 		printf("===============================================\n");
 		printf("Enter Choice: ");
 		int ch;
@@ -747,10 +889,14 @@ void menu(USER *db, int *users, char **city, int n, char **medicines, int tmed, 
 				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 4:
-				logout();
+				no_of_orders(order_freq, n, city);
 				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 5:
+				logout();
+				menu(db, users, city, n, medicines, tmed, floyd);
+				break;
+			case 6:
 				exit(0);
 				break;
 			default:
@@ -789,7 +935,7 @@ void menu(USER *db, int *users, char **city, int n, char **medicines, int tmed, 
 				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 2:
-				create_user(db, users, "user.txt");
+				db = create_user(db, users, "user.txt");
 				print_users(db, *users);
 				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
@@ -839,19 +985,26 @@ int main()
 	get_nodes("cities.txt", nodes);
 	get_users("user.txt", userp);
 	get_medicines("medicines.txt", tmedi);
+	get_ord("delivery_item.txt", torder);
 	city_name = set_cities("cities.txt", city_name, vertices);
 	medicines = set_cities("medicines.txt", medicines, tmed);
+	M = create_ord(M, tmorder);
 	graph = create_graph(graph, vertices);
 	floyd = create_graph(floyd, vertices);
 	add_graph_data(graph, "distance.txt");
 	cpy_graph(graph, floyd, vertices);
 	flloyd_warshall(floyd, vertices);
 	users = create_user_db(users, totalusers);
+	M = fill_ord("delivery_item.txt", M, tmorder);
+	print_ord(M, tmorder);
 	fill_userdb(users, totalusers, "user.txt");
 	print_users(users, totalusers);
 	dj_path = (int*) malloc(vertices* sizeof(int));
 	delivery.arr = (int*) malloc((ALOCATE_FACTOR) *sizeof(int));
 	delivery.norder = 0;
+	order_freq = (int*) malloc(vertices* sizeof(int));
+	order_freq = update_order_freq(order_freq, vertices, M, tmorder);
+	//no_of_orders(order_freq,vertices,city_name);
 	//printf("\n%d\n",travel_path(graph,floyd,delivery,vertices,city_name,1));
 	//print_graph_edge(floyd,city_name,vertices);
 	//printf("KMS: %d",dj(graph,vertices,102,103,city_name));
