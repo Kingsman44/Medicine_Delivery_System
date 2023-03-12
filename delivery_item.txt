@@ -1,3 +1,0 @@
-admin 5 4 12
-shiva 2 3 100
-shiva 5 34 100

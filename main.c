@@ -69,6 +69,18 @@ int tmed = 0;
 int *tmedi = &tmed;
 
 int *order_freq;
+int cst;
+
+int find_arr(int *arr, int m, int n, int find)
+{
+	for (int i = m; i < n; i++)
+	{
+		if (arr[i] == find)
+			return 1;
+	}
+
+	return 0;
+}
 
 void get_nodes(char filename[], int *nodes)
 {
@@ -114,20 +126,23 @@ void get_users(char filename[], int *users)
 void get_ord(char filename[], int *ord)
 {
 	FILE * fp;
+	*ord = 0;
 	fp = fopen(filename, "r");
 	if (fp == NULL)
 	{
-		printf("x %s not found\nx Aborting...", filename);
+		printf("%s not found\nAborting...", filename);
 		exit(0);
 	}
 
 	char str1[100];
 	int num, num1, num2;
-	while (!feof(fp))
-	{
-		fscanf(fp, "%s %d %d %d\n", str1, &num, &num1, &num2);
-		*ord = *ord + 1;
-	}
+	int num_read;
+	do {
+		num_read = fscanf(fp, "%s %d %d %d\n", str1, &num, &num1, &num2);
+		if (num_read > 0)
+		{ (*ord) ++;
+		}
+	} while (num_read != EOF);
 
 	fclose(fp);
 }
@@ -196,7 +211,7 @@ void overwrite_users(char filename[], USER *db, int n)
 
 	for (int i = 0; i < n; i++)
 	{
-		fscanf(fp, "%s\t%s\t%s\t%s\t%d\n", db[i].username, db[i].password, db[i].fname, db[i].lname, db[i].wallet);
+		fprintf(fp, "%s\t%s\t%s\t%s\t%d\n", db[i].username, db[i].password, db[i].fname, db[i].lname, db[i].wallet);
 	}
 
 	fclose(fp);
@@ -330,7 +345,7 @@ void print_users(USER *db, int n)
 	}
 }
 
-int find_cost(float kms)
+int find_cost(float kms, DEL dev, int *freq)
 {
 	int cost = 5;
 	if (kms > 5)
@@ -342,6 +357,11 @@ int find_cost(float kms)
 		cost = kms * MAX_COST_FACTOR;
 	}
 
+	for (int i = 1; i < dev.norder; i++)
+	{
+		cost += freq[i] *1.5;
+	}
+
 	return cost;
 }
 
@@ -349,7 +369,7 @@ int check_signin(USER *db, int n, char username[], char password[])
 {
 	for (int i = 0; i < n; i++)
 	{
-		if (strcasecmp(username, db[i].username) == 0 && strcasecmp(username, db[i].username) == 0)
+		if (strcasecmp(username, db[i].username) == 0 && strcmp(password, db[i].password) == 0)
 		{
 			strcpy(CURRENT_USERNAME, username);
 			strcpy(CURRENT_FNAME, db[i].fname);
@@ -626,10 +646,25 @@ int travel_path(float **graph, float **floyd, DEL dev, int n, char **city, int s
 	}
 
 	int v = dev.src;
-	if (show) printf("Path: Without Delivery:\n\n");
+	if (show)
+	{
+		printf("=======================\n");
+		printf("WITHOUT DELIVERY\n");
+		printf("=======================\n");
+	}
+
 	cost1 = dj(graph, n, dev.src, dev.des, city);
-	if (show) print_dj(city, 0);
-	if (show) printf("\nPath: after delivery:\n");
+	if (show)
+	{
+		printf("Shortest Route -\n");
+		print_dj(city, 0);
+		printf("\nTotal KMS: %d\n", cost1);
+		printf("=======================\n");
+		printf("WITH DELIVERY\n");
+		printf("=======================\n");
+		printf("Shortest Route -\n");
+	}
+
 	int u = min_distance_path(floyd[v], dev, traveled);
 	int gindex = get_index(dev.arr, dev.norder, u);
 	traveled[gindex] = 1;
@@ -655,7 +690,14 @@ int travel_path(float **graph, float **floyd, DEL dev, int n, char **city, int s
 	if (show) print_dj(city, 0);
 	//printf("\nSrc: %s\t\tDest %s\n",city_name[u],city_name[dev.des]);
 	//cost+=dj(graph,n,u,dev.des,city);
-	if (show) printf("\nCOST Without Delivery: %d\nCOST With Delivery: %d\n\n", cost1, cost);
+	if (show)
+	{
+		printf("\nTotal KMS: %d\n", cost);
+		printf("=======================\n");
+		cst = cost - cost1;
+		printf("Additional KMS: %d\n", cst);
+	}
+
 	if (dev.des == u)
 	{
 		return 1;
@@ -732,14 +774,38 @@ void request_delivery(char **city, int tcity, char **medicines, int tmed)
 	scanf("%d", &loc);
 	for (int i = 0; i < j; i++)
 	{
-		M[old + i].locid = loc;
+		M[old + i].locid = loc - 1;
 	}
 
 	print_ord(M, *torder);
 	add_to_file("delivery_item.txt", j, old);
 }
 
-void deliver_item(float **graph, float **floyd, char **city, int n)
+void no_of_orders(int *frq, int n, char **city)
+{
+	for (int i = 0; i < n; i++)
+	{
+		if (frq[i] > 0)
+			printf("%d)\t%s\t%d\n", i + 1, city[i], frq[i]);
+	}
+}
+
+int *update_order_freq(int *frq, int n, MED *M, int r)
+{
+	for (int i = 0; i < n; i++)
+	{
+		frq[i] = 0;
+	}
+
+	for (int i = 0; i < r; i++)
+	{
+		frq[M[i].locid]++;
+	}
+
+	return frq;
+}
+
+void deliver_item(float **graph, float **floyd, char **city, int n, int *frq)
 {
 	int src, des;
 	delivery.norder = 0;
@@ -766,11 +832,22 @@ void deliver_item(float **graph, float **floyd, char **city, int n)
 		printf("\n\n");
 	}
 
+	printf("Deliveries Available\n");
+	printf("\n========================\n");
+	no_of_orders(frq, n, city);
+	printf("\n========================\n");
 	printf("Write city id to 0 to stop\n\n");
+	printf("\n========================\n");
 	while (delivery.norder < n)
 	{
 		printf("Enter City id to deliver: ");
 		scanf("%d", &src);
+		if (frq[src - 1] == 0 || find_arr(delivery.arr, 0, delivery.norder, src - 1) || src - 1 == delivery.src)
+		{
+			printf("! Invalid or no delivery available in given city or already selected\n");
+			continue;
+		}
+
 		if (src == 0) break;
 		delivery.arr[delivery.norder] = src - 1;
 		delivery.norder++;
@@ -793,6 +870,42 @@ void deliver_item(float **graph, float **floyd, char **city, int n)
 
 	printf("Estimated calculations: \n");
 	travel_path(graph, floyd, delivery, n, city, 1);
+	int cost = find_cost(cst, delivery, frq);
+	printf("Total Earning: Rs %d\n", cost);
+	printf("=======================\n");
+	printf("Do you want to deliver them?\n");
+	printf("   YES - 1\n   NO  - 0\n");
+	printf("\nEnter Choice: ");
+	scanf("%d", &des);
+	if (des == 1)
+	{
+		int old = *torder;
+		int cnt = 0;
+		for (int i = 0; i < old; i++)
+		{
+			if (find_arr(delivery.arr, 1, delivery.norder, M[i].locid))
+			{
+				cnt++;
+				for (int j = i + 1; j < old; j++)
+				{
+					M[j - 1].id = M[j].id;
+					M[j - 1].locid = M[j].locid;
+					M[j - 1].number = M[j].number;
+					strcpy(M[j - 1].usrname, M[j].usrname);
+				}
+			}
+		}
+
+		*torder = *torder - cnt;
+		overwrite_ord("delivery_item.txt", M, *torder);
+		print_ord(M, *torder);
+		frq = update_order_freq(frq, n, M, *torder);
+		printf(" Money has been transfered into your wallet\n");
+		CURRENT_WALLET += cost;
+		printf("---%d---%d----", CURRENT_INDEX, totalusers);
+		users[CURRENT_INDEX].wallet += cost;
+		overwrite_users("user.txt", users, totalusers);
+	}
 }
 
 void check_intercity(float **graph, float **floyd, char **city, int n)
@@ -827,30 +940,6 @@ void check_intercity(float **graph, float **floyd, char **city, int n)
 	}
 }
 
-int *update_order_freq(int *frq, int n, MED *M, int m)
-{
-	for (int i = 0; i < n; i++)
-	{
-		frq[i] = 0;
-	}
-
-	for (int i = 0; i < m; i++)
-	{
-		frq[M[i].locid]++;
-	}
-
-	return frq;
-}
-
-void no_of_orders(int *frq, int n, char **city)
-{
-	for (int i = 0; i < n; i++)
-	{
-		if (frq[i] > 0)
-			printf("%d)\t%s\t%d\n", i + 1, city[i], frq[i]);
-	}
-}
-
 void menu(USER *db, int *users, char **city, int n, char **medicines, int tmed, float **floyd)
 {
 	int sign = is_signed();
@@ -876,11 +965,12 @@ void menu(USER *db, int *users, char **city, int n, char **medicines, int tmed, 
 			case 1:
 				//TO DO
 				request_delivery(city, n, medicines, tmed);
+				order_freq = update_order_freq(order_freq, n, M, *torder);
 				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 2:
 				// TO DO
-				deliver_item(graph, floyd, city, n);
+				deliver_item(graph, floyd, city, n, order_freq);
 				menu(db, users, city, n, medicines, tmed, floyd);
 				break;
 			case 3:
@@ -985,7 +1075,9 @@ int main()
 	get_nodes("cities.txt", nodes);
 	get_users("user.txt", userp);
 	get_medicines("medicines.txt", tmedi);
+	//printf("ORders: %d",tmorder);
 	get_ord("delivery_item.txt", torder);
+	//printf("ORders: %d",tmorder);
 	city_name = set_cities("cities.txt", city_name, vertices);
 	medicines = set_cities("medicines.txt", medicines, tmed);
 	M = create_ord(M, tmorder);
@@ -1003,6 +1095,7 @@ int main()
 	delivery.arr = (int*) malloc((ALOCATE_FACTOR) *sizeof(int));
 	delivery.norder = 0;
 	order_freq = (int*) malloc(vertices* sizeof(int));
+	//printf("%d",*torder);
 	order_freq = update_order_freq(order_freq, vertices, M, tmorder);
 	//no_of_orders(order_freq,vertices,city_name);
 	//printf("\n%d\n",travel_path(graph,floyd,delivery,vertices,city_name,1));

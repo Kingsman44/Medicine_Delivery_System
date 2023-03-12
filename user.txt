@@ -1,6 +1,6 @@
-admin			pass				xyz				abc	50
-hi				Bye123				Hi				Bye	70
-user			USer123				Shivan			Singh	0
-roll			hi 					bye 			guy	20
+admin	pass	xyz	abc	85
+hi	Bye123	Hi	Bye	70
+user	USer123	Shivan	Singh	0
+roll	hi	bye	guy	20
 Shivan	Shivan	Shivan	Singh	0
 shiva	S2345	w	d	0
